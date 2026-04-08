@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(venv/Scripts/python dairy-extension/generate_icons.py)"
-    ]
-  }
-}
