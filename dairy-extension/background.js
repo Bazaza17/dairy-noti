@@ -21,6 +21,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) checkForNewReport();
 });
 
+// If the service worker was killed and revived, immediately resume checking
+// so we don't wait up to 1 minute for the next alarm tick
+self.addEventListener('activate', () => {
+  checkForNewReport();
+});
+
 // ── Time window guard ─────────────────────────────────────────────────────────
 
 function isWithinCheckWindow() {
@@ -168,30 +174,19 @@ async function fetchAndSummarize(pdfUrl) {
 
   const prompt = `You are analyzing a USDA AMS National Dairy Products Sales Report.
 
-Extract ALL products from the current week vs prior week comparison table and return a JSON object with this exact structure:
+Extract ALL products and return a JSON object with this exact structure:
 
 {
   "reportDate": "the report date as a string",
   "table": [
     {
       "product": "product name",
-      "currentWeek": {
-        "weightedAvg": "price or N/A",
-        "low": "price or N/A",
-        "high": "price or N/A",
-        "loads": "number or N/A"
-      },
-      "priorWeek": {
-        "weightedAvg": "price or N/A",
-        "low": "price or N/A",
-        "high": "price or N/A",
-        "loads": "number or N/A"
-      },
-      "change": "dollar change e.g. +0.0250 or -0.0100",
-      "changePct": "percent change e.g. +1.2% or -0.8%"
+      "weightedAvg": "current week weighted avg price e.g. 1.7250",
+      "change": "net change from prior week e.g. +0.0250 or -0.0100",
+      "changePct": "percent change e.g. +1.4% or -0.6%"
     }
   ],
-  "brief": "2-3 paragraph trader-focused analysis. Highlight notable price moves, block/barrel spread changes, butter signals, whey/NDM demand shifts. Frame it for a CME Class III/IV futures trader."
+  "oneLiner": "One sentence max. State the biggest mover and overall market direction. e.g. Blocks led gains at +$0.05 while butter softened -$0.02 on the week."
 }
 
 Return ONLY the JSON object, no markdown, no explanation.`;
