@@ -4,7 +4,10 @@
   "version": "1.0",
   "description": "Pops up the moment the AMS midweek dairy PDF goes live.",
   "permissions": ["alarms", "notifications", "storage", "tabs", "scripting"],
-  "host_permissions": ["https://www.ams.usda.gov/*"],
+  "host_permissions": [
+    "https://www.ams.usda.gov/*",
+    "https://api.anthropic.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,5 +23,11 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["summary.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

@@ -1,9 +1,15 @@
 function fmt(isoString) {
   if (!isoString) return '—';
-  return new Date(isoString).toLocaleTimeString('en-US', {
+  const d = new Date(isoString);
+  const date = d.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    timeZone: 'America/Chicago'
+  });
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric', minute: '2-digit', second: '2-digit',
     timeZone: 'America/Chicago'
-  }) + ' CT';
+  });
+  return `${date} · ${time} CT`;
 }
 
 function isWatchWindow() {
@@ -43,6 +49,14 @@ chrome.storage.local.get(
       const btn = document.getElementById('openBtn');
       btn.style.display = 'block';
       btn.addEventListener('click', () => chrome.tabs.create({ url: pdfUrl }));
+    }
+
+    if (pdfUrl) {
+      const summaryBtn = document.getElementById('summaryBtn');
+      summaryBtn.style.display = 'block';
+      summaryBtn.addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('summary.html') });
+      });
     }
   }
 );

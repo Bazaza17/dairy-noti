@@ -1,3 +1,5 @@
+importScripts('config.js');
+
 const AMS_URL = 'https://www.ams.usda.gov/rules-regulations/mmr/dmr';
 const ALARM_NAME = 'checkDairyReport';
 const CHECK_INTERVAL_MINUTES = 1;
@@ -41,7 +43,6 @@ function waitForTabLoad(tabId) {
 
 // Runs inside the AMS page (same origin) — finds the PDF and fingerprints its content
 async function scrapeReportSignal() {
-  // Find the "Most Recent Issue" PDF link
   let pdfUrl = null;
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -58,21 +59,16 @@ async function scrapeReportSignal() {
   }
   if (!pdfUrl) return null;
 
-  // Fetch first 16KB of the PDF — same-origin, no CORS issues
-  // PDF metadata (title, creation date) lives near the start of the file
   try {
     const res = await fetch(pdfUrl, {
       headers: { 'Range': 'bytes=0-16383' },
       cache: 'no-store'
     });
     const buffer = await res.arrayBuffer();
-
-    // Hash the bytes with SubtleCrypto — available in extension contexts
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const fingerprint = Array.from(new Uint8Array(hashBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-
     return { pdfUrl, fingerprint };
   } catch (e) {
     console.error('[Dairy Watcher] Failed to fingerprint PDF:', e);
@@ -87,7 +83,6 @@ async function checkForNewReport() {
 
   await chrome.storage.local.set({ lastChecked: new Date().toISOString() });
 
-  // Open AMS page in a background tab (not focused)
   const tab = await chrome.tabs.create({ url: AMS_URL, active: false });
 
   try {
@@ -112,18 +107,18 @@ async function checkForNewReport() {
     }
 
     const { knownFingerprint } = await chrome.storage.local.get('knownFingerprint');
-    console.log('[Dairy Watcher] Stored fingerprint:', knownFingerprint);
-    console.log('[Dairy Watcher] Current fingerprint:', signal.fingerprint);
 
-    if (signal.fingerprint && signal.fingerprint !== knownFingerprint) {
+    if (signal.fingerprint !== knownFingerprint) {
       await chrome.storage.local.set({
         knownFingerprint: signal.fingerprint,
         pdfUrl: signal.pdfUrl,
-        detectedAt: new Date().toISOString()
+        detectedAt: new Date().toISOString(),
+        summary: null,
+        summaryGeneratedAt: null
       });
       fireNotification(signal.pdfUrl);
+      fetchAndSummarize(signal.pdfUrl);
     } else if (isWithinCheckWindow()) {
-      // PDF hasn't changed yet — keep polling every 15s until it does
       setTimeout(checkForNewReport, 15_000);
     }
   } finally {
@@ -134,16 +129,128 @@ async function checkForNewReport() {
 // ── Notification ──────────────────────────────────────────────────────────────
 
 function fireNotification(pdfUrl) {
-  // Open the PDF immediately — no click needed
   chrome.tabs.create({ url: pdfUrl, active: true });
 
-  // Notification is just a heads-up that it happened
   chrome.notifications.create('dairyReportLive', {
     type: 'basic',
     iconUrl: 'icons/icon128.png',
     title: 'Dairy Report is Live',
-    message: "This week's midweek dairy PDF is open and ready.",
+    message: "PDF is open. Summary is being generated…",
     priority: 2,
     requireInteraction: true
   });
+}
+
+// ── PDF fetch + Claude summary ────────────────────────────────────────────────
+
+async function fetchAndSummarize(pdfUrl) {
+  if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.includes('YOUR_KEY_HERE')) {
+    console.warn('[Dairy Watcher] No API key set in config.js.');
+    return;
+  }
+
+  console.log('[Dairy Watcher] Fetching full PDF for summarization…');
+
+  let pdfBase64;
+  try {
+    const res = await fetch(pdfUrl, { cache: 'no-store' });
+    const buffer = await res.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    pdfBase64 = btoa(binary);
+  } catch (e) {
+    console.error('[Dairy Watcher] Failed to fetch PDF:', e);
+    return;
+  }
+
+  console.log('[Dairy Watcher] Sending PDF to Claude…');
+
+  const prompt = `You are analyzing a USDA AMS National Dairy Products Sales Report.
+
+Extract ALL products from the current week vs prior week comparison table and return a JSON object with this exact structure:
+
+{
+  "reportDate": "the report date as a string",
+  "table": [
+    {
+      "product": "product name",
+      "currentWeek": {
+        "weightedAvg": "price or N/A",
+        "low": "price or N/A",
+        "high": "price or N/A",
+        "loads": "number or N/A"
+      },
+      "priorWeek": {
+        "weightedAvg": "price or N/A",
+        "low": "price or N/A",
+        "high": "price or N/A",
+        "loads": "number or N/A"
+      },
+      "change": "dollar change e.g. +0.0250 or -0.0100",
+      "changePct": "percent change e.g. +1.2% or -0.8%"
+    }
+  ],
+  "brief": "2-3 paragraph trader-focused analysis. Highlight notable price moves, block/barrel spread changes, butter signals, whey/NDM demand shifts. Frame it for a CME Class III/IV futures trader."
+}
+
+Return ONLY the JSON object, no markdown, no explanation.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64
+              }
+            },
+            {
+              type: 'text',
+              text: prompt
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    console.log('[Dairy Watcher] Claude raw response:', JSON.stringify(data).slice(0, 500));
+    const text = data.content?.[0]?.text;
+    if (!text) throw new Error('Empty response from Claude');
+
+    const summary = JSON.parse(text);
+    await chrome.storage.local.set({
+      summary,
+      summaryGeneratedAt: new Date().toISOString()
+    });
+
+    // Update notification to let him know summary is ready
+    chrome.notifications.create('dairySummaryReady', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Summary Ready',
+      message: 'Click the extension icon to view the market summary.',
+      priority: 2,
+      requireInteraction: false
+    });
+
+    console.log('[Dairy Watcher] Summary stored.');
+  } catch (e) {
+    console.error('[Dairy Watcher] Claude API error:', e);
+  }
 }

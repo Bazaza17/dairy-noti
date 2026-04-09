@@ -4,3 +4,4 @@ __pycache__/
 .env
 reports.db
 .claude/
+dairy-extension/config.js
