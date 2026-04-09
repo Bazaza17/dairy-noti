@@ -114,6 +114,23 @@
     }
 
     #openBtn:hover { background: #1e40af; }
+
+    #summaryBtn {
+      display: none;
+      width: calc(100% - 32px);
+      margin: 0 16px 14px;
+      padding: 10px;
+      background: #1a1d27;
+      color: #60a5fa;
+      border: 1px solid #1e3a8a;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #summaryBtn:hover { background: #1e2130; }
   </style>
 </head>
 <body>
@@ -142,6 +159,7 @@
   </div>
 
   <button id="openBtn">Open Latest Report →</button>
+  <button id="summaryBtn">View Market Summary →</button>
 
   <script src="popup.js"></script>
 </body>
