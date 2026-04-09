@@ -10,126 +10,156 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #0d0f14;
       color: #e2e4ed;
-      padding: 32px 24px;
-      max-width: 900px;
+      padding: 24px;
+      max-width: 680px;
       margin: 0 auto;
     }
 
-    header {
+    /* ── Header ── */
+    .header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 28px;
+      align-items: center;
+      margin-bottom: 16px;
     }
 
-    .header-left h1 {
-      font-size: 20px;
-      font-weight: 700;
-    }
-
-    .header-left .meta {
-      font-size: 12px;
-      color: #4b5270;
-      margin-top: 4px;
-    }
+    .title { font-size: 15px; font-weight: 700; color: #f0f2ff; }
+    .meta  { font-size: 11px; color: #3d4263; margin-top: 3px; }
 
     .pdf-link {
-      font-size: 12px;
+      font-size: 11px;
       color: #60a5fa;
       text-decoration: none;
-      padding: 6px 12px;
+      padding: 5px 10px;
       border: 1px solid #1e3a8a;
-      border-radius: 6px;
+      border-radius: 5px;
       white-space: nowrap;
     }
-
     .pdf-link:hover { background: #1e3a8a; }
 
-    /* ── Brief ── */
-    .brief {
-      background: #1a1d27;
-      border: 1px solid #2a2d3a;
-      border-radius: 10px;
-      padding: 18px 20px;
-      margin-bottom: 28px;
-      line-height: 1.65;
-      font-size: 13.5px;
-      color: #c8cde0;
-    }
-
-    .section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #4b5270;
-      margin-bottom: 12px;
-    }
-
-    /* ── Table ── */
-    .table-wrap {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    thead th {
-      text-align: right;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: #4b5270;
-      padding: 6px 12px;
-      border-bottom: 1px solid #1e2130;
-      white-space: nowrap;
-    }
-
-    thead th:first-child { text-align: left; }
-
-    tbody tr { border-bottom: 1px solid #141620; }
-    tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #13151f; }
-
-    td {
-      padding: 9px 12px;
-      text-align: right;
+    /* ── One-liner callout ── */
+    .callout {
+      background: #13151f;
+      border-left: 3px solid #3b5bdb;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 12.5px;
       color: #9ba3c0;
+      line-height: 1.5;
+    }
+
+    /* ── Product rows ── */
+    .rows { display: flex; flex-direction: column; gap: 6px; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #13151f;
+      border: 1px solid #1a1d28;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle tint based on direction */
+    .row.up   { border-left: 3px solid #16a34a; }
+    .row.down { border-left: 3px solid #dc2626; }
+    .row.flat { border-left: 3px solid #374151; }
+
+    /* Background fill showing magnitude */
+    .row::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: var(--mag, 0%);
+      opacity: 0.04;
+      pointer-events: none;
+    }
+    .row.up::before   { background: #22c55e; }
+    .row.down::before { background: #ef4444; }
+
+    .product-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e4ed;
       white-space: nowrap;
     }
 
-    td:first-child {
-      text-align: left;
-      color: #e2e4ed;
-      font-weight: 500;
+    /* Change bar */
+    .bar-wrap {
+      width: 80px;
+      height: 4px;
+      background: #1e2130;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      width: var(--bar, 0%);
+    }
+    .up   .bar-fill { background: #22c55e; }
+    .down .bar-fill { background: #ef4444; }
+    .flat .bar-fill { background: #374151; }
+
+    .change-col {
+      text-align: right;
+      min-width: 70px;
+    }
+    .change-val {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .change-pct {
+      font-size: 10px;
+      margin-top: 1px;
+      display: block;
+      opacity: 0.7;
+    }
+    .up   .change-val, .up   .change-pct { color: #4ade80; }
+    .down .change-val, .down .change-pct { color: #f87171; }
+    .flat .change-val, .flat .change-pct { color: #6b7280; }
+
+    .price-col {
+      text-align: right;
+      min-width: 60px;
+    }
+    .price-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f0f2ff;
+      font-variant-numeric: tabular-nums;
+    }
+    .price-label {
+      font-size: 9px;
+      color: #3d4263;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 1px;
     }
 
-    .positive { color: #4ade80; }
-    .negative { color: #f87171; }
-    .neutral  { color: #9ba3c0; }
-
-    /* ── Loading / error states ── */
+    /* ── States ── */
     .state {
       text-align: center;
-      padding: 60px 0;
+      padding: 80px 0;
       color: #4b5270;
+      font-size: 13px;
     }
-
-    .state .spinner {
-      width: 28px;
-      height: 28px;
-      border: 3px solid #1e2130;
+    .spinner {
+      width: 24px; height: 24px;
+      border: 2px solid #1e2130;
       border-top-color: #3b5bdb;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin: 0 auto 14px;
+      margin: 0 auto 12px;
     }
-
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .state p { font-size: 13px; }
   </style>
 </head>
 <body>
@@ -139,45 +169,18 @@
     <p>Generating summary…</p>
   </div>
 
-  <div id="noKey" class="state" style="display:none">
-    <p>No API key set. <a href="#" id="openOptions" style="color:#60a5fa">Open Settings</a> to add your Anthropic key.</p>
-  </div>
-
   <div id="content" style="display:none">
-    <header>
-      <div class="header-left">
-        <h1>Dairy Market Summary</h1>
+    <div class="header">
+      <div>
+        <div class="title">Dairy Market Summary</div>
         <div class="meta" id="metaLine">—</div>
       </div>
-      <a id="pdfLink" class="pdf-link" href="#" target="_blank">Open Raw PDF →</a>
-    </header>
-
-    <div class="brief">
-      <div class="section-title">Trader Brief</div>
-      <div id="brief">—</div>
+      <a id="pdfLink" class="pdf-link" href="#" target="_blank">Raw PDF →</a>
     </div>
 
-    <div class="section-title">Current Week vs Prior Week</div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Cur Wtd Avg</th>
-            <th>Cur Low</th>
-            <th>Cur High</th>
-            <th>Cur Loads</th>
-            <th>Prior Wtd Avg</th>
-            <th>Prior Low</th>
-            <th>Prior High</th>
-            <th>Prior Loads</th>
-            <th>Change</th>
-            <th>Chg %</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
+    <div class="callout" id="oneLiner">—</div>
+
+    <div class="rows" id="rows"></div>
   </div>
 
   <script src="summary.js"></script>

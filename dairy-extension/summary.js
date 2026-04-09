@@ -10,32 +10,19 @@ function fmt(isoString) {
   }) + ' CT';
 }
 
-function changeClass(change) {
-  if (!change || change === 'N/A') return 'neutral';
-  return change.startsWith('+') ? 'positive' : 'negative';
-}
-
-function cell(val) {
-  return `<td>${val ?? '—'}</td>`;
-}
-
 chrome.storage.local.get(
   ['summary', 'summaryGeneratedAt', 'pdfUrl'],
   ({ summary, summaryGeneratedAt, pdfUrl }) => {
-
     if (!summary) {
-      // Still generating — poll every 2s
       const interval = setInterval(() => {
-        chrome.storage.local.get(['summary'], ({ summary }) => {
-          if (summary) {
-            clearInterval(interval);
-            render(summary, summaryGeneratedAt, pdfUrl);
-          }
-        });
+        chrome.storage.local.get(
+          ['summary', 'summaryGeneratedAt', 'pdfUrl'],
+          ({ summary, summaryGeneratedAt, pdfUrl }) => {
+            if (summary) { clearInterval(interval); render(summary, summaryGeneratedAt, pdfUrl); }
+          });
       }, 2000);
       return;
     }
-
     render(summary, summaryGeneratedAt, pdfUrl);
   }
 );
@@ -47,32 +34,36 @@ function render(summary, generatedAt, pdfUrl) {
   document.getElementById('metaLine').textContent =
     `${summary.reportDate ?? ''}  ·  Generated ${fmt(generatedAt)}`;
 
-  if (pdfUrl) {
-    document.getElementById('pdfLink').href = pdfUrl;
-  }
+  if (pdfUrl) document.getElementById('pdfLink').href = pdfUrl;
 
-  document.getElementById('brief').textContent = summary.brief ?? '—';
+  document.getElementById('oneLiner').textContent = summary.oneLiner ?? '—';
 
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = '';
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+
+  // Find max absolute change for bar scaling
+  const maxChange = Math.max(
+    ...( summary.table ?? []).map(r => Math.abs(parseFloat(r.change) || 0))
+  );
 
   for (const row of (summary.table ?? [])) {
-    const cw = row.currentWeek ?? {};
-    const pw = row.priorWeek ?? {};
-    const cls = changeClass(row.change);
-    tbody.innerHTML += `
-      <tr>
-        <td>${row.product ?? '—'}</td>
-        ${cell(cw.weightedAvg)}
-        ${cell(cw.low)}
-        ${cell(cw.high)}
-        ${cell(cw.loads)}
-        ${cell(pw.weightedAvg)}
-        ${cell(pw.low)}
-        ${cell(pw.high)}
-        ${cell(pw.loads)}
-        <td class="${cls}">${row.change ?? '—'}</td>
-        <td class="${cls}">${row.changePct ?? '—'}</td>
-      </tr>`;
+    const change = parseFloat(row.change) || 0;
+    const dir = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+    const barPct = maxChange > 0 ? Math.round((Math.abs(change) / maxChange) * 100) : 0;
+    const magPct = barPct * 0.3; // subtle background tint, max 30%
+
+    rows.innerHTML += `
+      <div class="row ${dir}" style="--mag:${magPct}%">
+        <div class="product-name">${row.product ?? '—'}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="--bar:${barPct}%"></div></div>
+        <div class="change-col">
+          <span class="change-val">${row.change ?? '—'}</span>
+          <span class="change-pct">${row.changePct ?? ''}</span>
+        </div>
+        <div class="price-col">
+          <div class="price-val">${row.weightedAvg ?? '—'}</div>
+          <div class="price-label">Wtd Avg</div>
+        </div>
+      </div>`;
   }
 }
