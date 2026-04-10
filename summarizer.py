@@ -33,7 +33,7 @@ def generate_brief(tables: dict, pdf_url: str) -> dict:
         for k, v in tables.items()
     )
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=1024,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"Here is this week's midweek dairy data:\n\n{table_str}"}]
