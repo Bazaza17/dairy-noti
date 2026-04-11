@@ -167,8 +167,12 @@ async function fetchAndSummarize(pdfUrl, attempt = 1) {
     const res    = await fetch(pdfUrl, { cache: 'no-store' });
     const buffer = await res.arrayBuffer();
     const bytes  = new Uint8Array(buffer);
+    // Chunk-based encoding — avoids per-byte string concatenation which is very slow
+    const CHUNK  = 8192;
     let binary   = '';
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
     pdfBase64 = btoa(binary);
   } catch (e) {
     console.error('[Dairy Watcher] PDF fetch failed:', e);
@@ -236,6 +240,23 @@ Return ONLY the JSON object, no markdown, no explanation.`;
     console.log('[Dairy Watcher] Summary stored.');
   } catch (e) {
     console.error(`[Dairy Watcher] Claude error (attempt ${attempt}):`, e);
-    if (attempt < 3) setTimeout(() => fetchAndSummarize(pdfUrl, attempt + 1), 5000 * attempt);
+    if (attempt < 3) {
+      setTimeout(() => fetchAndSummarize(pdfUrl, attempt + 1), 5000 * attempt);
+    } else {
+      // All retries exhausted — write error state so summary page can react
+      await chrome.storage.local.set({ summaryError: true });
+    }
   }
 }
+
+// Allow summary page to trigger a retry via message
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'RETRY_SUMMARY') {
+    chrome.storage.local.get('pdfUrl', ({ pdfUrl }) => {
+      if (pdfUrl) {
+        chrome.storage.local.set({ summaryError: false });
+        fetchAndSummarize(pdfUrl);
+      }
+    });
+  }
+});
