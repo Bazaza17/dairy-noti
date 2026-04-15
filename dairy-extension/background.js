@@ -114,10 +114,31 @@ async function checkForNewReport() {
     if (!signal?.pdfUrl)     { console.warn('[Dairy Watcher] No PDF link found.');       return; }
     if (!signal.fingerprint) { console.warn('[Dairy Watcher] Could not fingerprint PDF.'); return; }
 
-    const { knownFingerprint } = await chrome.storage.local.get('knownFingerprint');
+    const { knownFingerprint, baselineFingerprint, firedFingerprint } =
+      await chrome.storage.local.get(
+        ['knownFingerprint', 'baselineFingerprint', 'firedFingerprint']
+      );
 
-    if (signal.fingerprint !== knownFingerprint) {
+    // First ever run: remember what's currently on the server as the
+    // "old" report so we only fire when it CHANGES. Without this we'd
+    // immediately open last week's PDF the moment the extension loads.
+    if (!baselineFingerprint) {
       await chrome.storage.local.set({
+        baselineFingerprint: signal.fingerprint,
+        knownFingerprint: signal.fingerprint
+      });
+      console.log('[Dairy Watcher] Baseline seeded — waiting for the report to change.');
+      return;
+    }
+
+    const isNewReport =
+      signal.fingerprint !== baselineFingerprint &&
+      signal.fingerprint !== firedFingerprint;
+
+    if (isNewReport) {
+      // Mark fired BEFORE any async work so concurrent ticks can't double-fire.
+      await chrome.storage.local.set({
+        firedFingerprint: signal.fingerprint,
         knownFingerprint: signal.fingerprint,
         pdfUrl: signal.pdfUrl,
         detectedAt: new Date().toISOString(),
@@ -209,7 +230,7 @@ Return ONLY the JSON object, no markdown, no explanation.`;
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
         messages: [{
           role: 'user',
