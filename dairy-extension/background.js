@@ -35,42 +35,38 @@ function isWithinCheckWindow() {
   return ct.getDay() === 3 && ct.getHours() >= 10 && ct.getHours() < 14;
 }
 
-// ── Tab helpers ───────────────────────────────────────────────────────────────
+// ── Scrape + fingerprint (no tabs, runs entirely in service worker) ─────────
 
-function waitForTabLoad(tabId) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error('Tab load timed out after 30s'));
-    }, TAB_TIMEOUT_MS);
-
-    function listener(id, info) {
-      if (id === tabId && info.status === 'complete') {
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    }
-    chrome.tabs.onUpdated.addListener(listener);
-  });
-}
-
-// Runs inside the AMS page — finds PDF link and hashes first 16KB
-async function scrapeReportSignal() {
-  let pdfUrl = null;
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  let node;
-  while ((node = walker.nextNode())) {
-    if (node.textContent.toLowerCase().includes('most recent issue')) {
-      const container = node.parentElement;
-      for (const el of [container, container?.parentElement]) {
-        if (!el) continue;
-        const link = el.querySelector('a[href$=".pdf"]');
-        if (link) { pdfUrl = link.href; break; }
-      }
-      if (pdfUrl) break;
+// Parse the AMS listing HTML with a regex to find the "Most Recent Issue" PDF link.
+// Service workers have no DOMParser, so we can't use querySelector — but the page
+// markup around "most recent issue" is stable enough for a regex.
+function extractPdfUrlFromHtml(html) {
+  const lower = html.toLowerCase();
+  const anchorRe = /<a[^>]*href="([^"]+\.pdf)"[^>]*>/gi;
+  let match;
+  while ((match = anchorRe.exec(html)) !== null) {
+    // Look at the ~400 chars before this anchor for the phrase "most recent issue"
+    const windowStart = Math.max(0, match.index - 400);
+    const context = lower.slice(windowStart, match.index + match[0].length);
+    if (context.includes('most recent issue')) {
+      let href = match[1];
+      if (href.startsWith('/')) href = 'https://www.ams.usda.gov' + href;
+      return href;
     }
   }
+  return null;
+}
+
+async function scrapeReportSignal() {
+  let pageRes;
+  try {
+    pageRes = await fetch(AMS_URL, { cache: 'no-store' });
+  } catch (e) {
+    console.error('[Dairy Watcher] Failed to fetch AMS page:', e);
+    return null;
+  }
+  const html = await pageRes.text();
+  const pdfUrl = extractPdfUrlFromHtml(html);
   if (!pdfUrl) return null;
 
   try {
@@ -98,17 +94,8 @@ async function checkForNewReport() {
 
   await chrome.storage.local.set({ lastChecked: new Date().toISOString() });
 
-  const tab = await chrome.tabs.create({ url: AMS_URL, active: false });
-
   try {
-    await waitForTabLoad(tab.id);
-
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: scrapeReportSignal
-    });
-
-    const signal = results?.[0]?.result;
+    const signal = await scrapeReportSignal();
     console.log('[Dairy Watcher] Signal:', signal);
 
     if (!signal?.pdfUrl)     { console.warn('[Dairy Watcher] No PDF link found.');       return; }
@@ -151,7 +138,6 @@ async function checkForNewReport() {
   } catch (e) {
     console.error('[Dairy Watcher] Check error:', e);
   } finally {
-    chrome.tabs.remove(tab.id).catch(() => {});
     isChecking = false;
     // Always reschedule within the window — whether check passed, failed, or found nothing
     if (isWithinCheckWindow()) setTimeout(checkForNewReport, POLL_MS);
