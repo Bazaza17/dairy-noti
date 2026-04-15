@@ -14,17 +14,22 @@ function fmt(isoString) {
 
 function isWatchWindow() {
   const ct = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-  return ct.getDay() === 3 && ct.getHours() >= 11 && ct.getHours() < 13;
+  return ct.getDay() === 3 && ct.getHours() >= 10 && ct.getHours() < 14;
 }
 
 chrome.storage.local.get(
-  ['lastChecked', 'detectedAt', 'pdfUrl', 'knownFingerprint'],
-  ({ lastChecked, detectedAt, pdfUrl, knownFingerprint }) => {
+  ['lastChecked', 'detectedAt', 'pdfUrl', 'knownFingerprint', 'baselineFingerprint'],
+  ({ lastChecked, detectedAt, pdfUrl, knownFingerprint, baselineFingerprint }) => {
 
     const dot   = document.getElementById('dot');
     const label = document.getElementById('statusLabel');
 
-    if (knownFingerprint) {
+    // "Live" only when the fingerprint has moved off the seeded baseline,
+    // i.e. a genuinely new report has been detected this week.
+    const hasFreshDetection =
+      knownFingerprint && baselineFingerprint && knownFingerprint !== baselineFingerprint;
+
+    if (hasFreshDetection) {
       dot.className   = 'dot dot-live';
       label.className = 'status-label status-live';
       label.textContent = 'Report Live';
@@ -40,18 +45,16 @@ chrome.storage.local.get(
 
     document.getElementById('lastChecked').textContent = fmt(lastChecked);
 
-    if (detectedAt) {
+    if (hasFreshDetection && detectedAt) {
       document.getElementById('detectedRow').style.display = 'flex';
       document.getElementById('detectedAt').textContent = fmt(detectedAt);
     }
 
-    if (pdfUrl) {
+    if (hasFreshDetection && pdfUrl) {
       const btn = document.getElementById('openBtn');
       btn.style.display = 'block';
       btn.addEventListener('click', () => chrome.tabs.create({ url: pdfUrl }));
-    }
 
-    if (pdfUrl) {
       const summaryBtn = document.getElementById('summaryBtn');
       summaryBtn.style.display = 'block';
       summaryBtn.addEventListener('click', () => {
